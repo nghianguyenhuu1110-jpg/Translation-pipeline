@@ -1,173 +1,159 @@
 # Executive Report: Subtitle Translation Pipeline
-**Version 3.2.0 — Pilot Results & Scaling Strategy**
+**Version 3.2.0 — CEO Approval Brief**
 **Date: April 2026**
 
 ---
 
 ## Executive Summary
 
-Prep has successfully built and piloted an automated subtitle translation pipeline for its IELTS/TOEIC video course library. The system translates English subtitle files into target languages, applies AI-assisted quality review, and validates structural integrity before delivery.
+Prep has built and successfully piloted an automated subtitle translation pipeline. In the pilot, **22 lessons** were translated into Traditional Chinese (Taiwan), all passing structural validation with zero errors.
 
-The pilot covered **22 lessons** translated into Traditional Chinese (Taiwan), all of which passed automated structural validation with zero timestamp drift. The pipeline is operational and producing output of sufficient quality to move toward production — provided a final human review round is included before publishing.
+The pipeline is producing output of professional quality, but currently relies on **free tools and a manual AI review process** — creating inconsistency and reliability risks that are not acceptable for production content at scale.
 
-**The recommended next step is to build this into an internal tool** accessible to the broader content team, with a structured human review stage as the quality gate before any subtitle file goes live.
+This report proposes a **phased approach**:
 
----
+- **Phase 1 (immediate ask):** A small investment to fix the two critical reliability risks, making output consistent and production-ready every time.
+- **Phase 2 (future, separate approval):** A full internal web tool for the broader content team.
 
-## 1. What the Pipeline Does
-
-The pipeline converts English `.srt` subtitle files into translated, production-ready subtitle files through four automated stages:
-
-| Stage | What Happens | Human Involvement |
-|---|---|---|
-| **1 — Auto-Translate** | Google Translate generates a raw baseline translation | None |
-| **2 — AI Review** | An AI reviewer (currently Claude) checks every segment against glossary rules, pedagogical standards, and linguistic guidelines. An Google AI Studio/Gemini runs another round of review | Triggers the review; pastes the output back |
-| **3 — Build SRT** | Reviewed corrections are compiled into a final `.srt` file | None |
-| **4 — Validation** | Automated check confirms segment count and timestamps match the source exactly | None |
-
-The process is designed to be fast, consistent, and scalable. A single operator can process an entire course suite in a working day.
+The Phase 1 quality gate is handled by **external proofreaders** — not additional software — keeping the investment minimal while maintaining a high standard before any subtitle reaches a student.
 
 ---
 
-## 2. Pilot Results
+## 1. Current State & What's Working
 
-| Metric | Result |
+The pipeline translates English `.srt` subtitle files into target languages through four stages:
+
+| Stage | What Happens |
 |---|---|
-| Lessons processed | 22 |
-| Target language | Traditional Chinese (Taiwan) |
-| Structural validation pass rate | 100% (22/22) |
-| Timestamp drift | 0 files |
-| Segment recovery (large files) | 100% (e.g. L21S1 restored from 127 → 179 segments) |
+| **1 — Auto-Translate** | Generates a raw baseline translation automatically |
+| **2 — AI Review** | AI checks every segment against glossary, pedagogical, and language rules |
+| **3 — Build** | Reviewed corrections compiled into a final `.srt` subtitle file |
+| **4 — Validate** | Automated check confirms the output matches the source structure exactly |
 
-The pipeline has demonstrated reliability under real course content, including complex large-format lessons that previously caused data loss with earlier automation approaches.
+**Pilot results: 22 lessons translated, 100% structural validation pass rate, zero timestamp drift.**
+
+The core logic is proven and the quality of reviewed output is strong. The problem is not the pipeline itself — it is the tools it currently depends on.
 
 ---
 
-## 3. Output Quality & Production Readiness
+## 2. The Two Problems That Need to Be Fixed
 
-### What the pipeline guarantees
-- **Structural integrity**: Every output file has the exact same segment count and timestamps as the source English file. Subtitles will never be out of sync with video.
-- **Glossary compliance**: Key IELTS/TOEIC terms, brand names, and pedagogical vocabulary are handled according to defined rules.
-- **Consistency**: Every file is processed against the same ruleset, eliminating the variance of manual translation.
+### Problem 1 — Token Exhaustion (Reliability Risk)
+The AI review step is currently done by pasting content into a chat window. Chat windows have a finite context limit. As a session accumulates history, available tokens shrink — large files can be silently truncated mid-review, producing incomplete output with no warning.
 
-### What the pipeline does not guarantee
-- **Nuance and flow**: Machine translation produces accurate but sometimes unnatural phrasing. AI review significantly improves this, but it is not equivalent to a trained human translator.
-- **Cultural appropriateness**: Idiomatic expressions, tone, and register require human judgement.
-- **Domain expertise**: A reviewer familiar with IELTS/TOEIC pedagogy will catch errors the AI may not flag.
+**Impact:** We cannot guarantee a complete, reliable review for every file under the current approach.
 
-### Recommendation: Two-Round Quality Model
+### Problem 2 — No Pinned Model (Consistency Risk)
+The review step has been run across multiple AI interfaces — Claude, Antigravity, and Google AI Studio (Gemini). Different models interpret the review rules differently and produce different output quality, particularly for CJK languages.
 
-> **It is strongly recommended that no pipeline output goes directly to production without a final human review.**
+**Impact:** Two files reviewed in different sessions may not meet the same quality standard, creating inconsistency across the subtitle library.
 
-The proposed quality model is:
+### Root cause of both problems
+Both issues stem from the same source: the review step runs through a manual chat interface rather than a controlled API call. Fixing this resolves both problems simultaneously.
+
+---
+
+## 3. Phase 1 — The Minimal Investment Ask
+
+### What changes
+Replace the two free/manual dependencies with reliable, controlled alternatives:
+
+| Current (Pilot) | Phase 1 |
+|---|---|
+| Google Translate free web scraper | Google Cloud Translation API (paid, reliable) |
+| Manual AI review via chat window | Claude API with pinned model (`claude-opus-4-6`) |
+
+### What stays the same
+- The pipeline scripts, validation logic, and file structure are unchanged
+- The workflow remains the same — translate, review, build, validate
+- The team operates it the same way
+
+### What this delivers
+- **Consistent output every time** — same model, same rules, every file
+- **No token exhaustion** — each API call is a fresh context; file size is no longer a constraint
+- **Audit trail** — every review is logged with the model version and timestamp
+- **No manual copy-paste** — the review step runs automatically as part of the pipeline
+
+### Engineering effort
+A legacy automated review script (`Step_2_Claude_Review_API.py`) already exists from an earlier version of the pipeline. Phase 1 is primarily updating and integrating that script — **estimated 2–3 days of developer time**, not a new build.
+
+---
+
+## 4. Quality Assurance — External Proofreaders
+
+Automating the AI review does not remove human judgement from the process. The proposed quality model is:
 
 ```
-Auto-Translate → AI Review → [Pipeline Output] → Human Review → Production
+Auto-Translate → AI Review (API, pinned) → External Proofreader → Final Product
 ```
 
-The pipeline output should be treated as a **high-quality first draft**, not a final deliverable. A qualified reviewer — ideally a bilingual educator familiar with the exam content — should perform a final pass before any subtitles are published to students.
+**The pipeline produces a professional first draft.** An external proofreader — a bilingual educator or professional translator familiar with IELTS/TOEIC content — validates the output before it is published to students.
 
-This is consistent with industry standards for AI-assisted translation workflows and significantly reduces per-file review time compared to translating from scratch.
+This is industry-standard practice for AI-assisted translation workflows and provides a clear quality gate without requiring Prep to build or staff an in-house review function at this stage.
 
-**Estimated time savings with pipeline vs. fully manual translation: 70–80% reduction in production time per lesson.**
+**Estimated time savings versus fully manual translation: 70–80% reduction per lesson.** The proofreader's role shifts from translating to validating — a significantly faster and lower-cost engagement.
 
 ---
 
-## 4. Scaling to an Internal Tool
+## 5. Phase 1 Investment Summary
 
-The current pipeline runs locally on one machine. To deploy it as a shared internal tool accessible to the content team, the following investments are required.
-
-### Core Requirements
-
-**Infrastructure**
-- A server or cloud environment to run translation jobs (not tied to one person's laptop)
-- Cloud file storage (e.g. Google Cloud Storage or AWS S3) to replace local input/output folders
-- A database to track job status, file history, and user activity
-
-**User Interface**
-- A web-based dashboard so non-technical staff can upload files, monitor progress, and download outputs without using the command line
-- A built-in review interface where human reviewers can read, edit, and approve segments directly in the browser
-
-**Authentication & Access Control**
-- User accounts with defined roles: Administrator, Reviewer, Viewer
-- Audit trail: who approved what, and when
-
-**Translation Service**
-- The current free Google Translate integration will not scale under concurrent use
-- A paid translation API (Google Cloud Translation, DeepL, or equivalent) is required for production reliability
-
-**AI Review Integration**
-- Currently, AI review requires a human to manually paste a prompt into a chat interface
-- For an internal tool, this step would be called automatically via API, removing the manual handoff entirely
-- This is the single most significant architectural change
-
-### Options for the AI Review Step
-
-| Approach | Description | Trade-off |
+| Item | Type | Estimated Cost |
 |---|---|---|
-| **Fully automated** | Claude API called automatically; no human in the loop for AI review | Faster, lower cost per file; less oversight |
-| **Human-in-the-loop** | Reviewer triggers AI review and approves output before proceeding | Higher quality control; adds time |
-| **Hybrid (recommended)** | AI review runs automatically; human reviewer approves before production | Balances speed and quality |
+| Google Cloud Translation API | Ongoing (per character) | Low — volume-dependent |
+| Claude API (`claude-opus-4-6`) | Ongoing (per token reviewed) | Low — volume-dependent |
+| Developer time to integrate | One-time | ~2–3 days |
+| External proofreader (per course suite) | Per engagement | Market rate |
 
-The hybrid model aligns with the two-round quality model described above and is the recommended approach.
+For a team processing one course suite per month, API costs are expected to be in the range of **low hundreds of dollars per month**, depending on volume and providers. Exact figures can be confirmed with a usage estimate before commitment.
 
----
-
-## 5. Resource Requirements
-
-### To build the internal tool
-
-| Area | Scope |
-|---|---|
-| Backend development | Pipeline steps refactored into a web service; job queue for async processing |
-| Frontend development | Web UI: file upload, status dashboard, review and approval interface |
-| Infrastructure setup | Cloud hosting, file storage, database, CI/CD pipeline |
-| API integration | Claude API for automated AI review; paid translation API |
-| QA & testing | End-to-end testing with real course content |
-
-**Estimated scope:** 6–10 weeks for a small development team (2–3 engineers) to deliver a functional internal tool covering the core workflow.
-
-### Ongoing operational costs (estimated)
-
-| Service | Basis |
-|---|---|
-| Translation API | Per character translated (volume-dependent) |
-| Claude API (AI review) | Per token reviewed (volume-dependent) |
-| Cloud hosting & storage | Per month, based on usage |
-
-For a team processing one course suite per month, API costs are expected to be modest (low hundreds of dollars). Exact figures depend on volume and chosen providers.
+There is no infrastructure build, no server, and no new software product required for Phase 1.
 
 ---
 
-## 6. Risks & Mitigations
+## 6. Phase 2 — Full Internal Tool (Future)
+
+Once Phase 1 is proven and output quality is validated by proofreaders, the natural next step is a shared internal tool that allows the broader content team to run the pipeline without technical knowledge.
+
+This would include a web interface, user accounts, cloud file storage, and a built-in review and approval workflow. This is a **separate approval and a separate conversation** — Phase 2 does not need to be committed to now.
+
+Phase 1 produces the consistent, reliable foundation that Phase 2 would be built on.
+
+---
+
+## 7. Risk Assessment
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
-| AI review misses a terminology error | Medium | Final human review round before production |
-| Translation API rate limits or downtime | Low–Medium | Retry logic in pipeline; fallback provider |
-| Segment count mismatch in output | Low | Step 4 validation fails hard; file cannot be marked production-ready until resolved |
-| Staff unfamiliar with review process | Medium | Reviewer training guide; in-app review guidelines |
-| Sensitive course content exposed to third-party APIs | Low–Medium | Review data retention policies of translation and AI providers; consider on-premise options for sensitive content |
+| API translation quality lower than expected | Low | API-grade Google Translate is equivalent to or better than the free version; proofreader catches any issues |
+| Claude API review misses an error | Low–Medium | External proofreader is the quality gate before production |
+| API costs exceed estimates | Low | Usage can be monitored and capped; pilot data provides a reliable baseline |
+| Proofreader availability or quality | Medium | Standard vendor management; brief against the same review rules used by the AI |
+| Phase 1 scope expands unexpectedly | Low | Legacy review script already exists; work is integration, not new development |
 
 ---
 
-## 7. Recommended Next Steps
+## 8. Recommendation & Next Steps
 
-1. **Adopt the two-round quality model now** — treat all current pipeline output as first drafts pending human review before publishing
-2. **Define the reviewer role** — identify who in the content team will own the final review step and establish a sign-off process
-3. **Decide on AI review approach** — automated, human-in-the-loop, or hybrid (recommendation: hybrid)
-4. **Commission a technical scoping exercise** — a short discovery sprint to produce detailed specifications and a delivery timeline for the internal tool
-5. **Evaluate translation API providers** — compare Google Cloud Translation, DeepL, and others on cost, quality, and data privacy terms
+**Recommendation:** Approve Phase 1. The investment is small, the engineering work is mostly already done, and it directly resolves the two High-rated risks identified in the current workflow.
+
+**Proposed next steps:**
+
+1. **Approve Phase 1 budget** — API costs + 2–3 days developer time
+2. **Identify an external proofreader** — brief them against the existing review guidelines (`claude_review_prompt.txt`)
+3. **Integrate the Claude API review step** — update and wire up the existing legacy script
+4. **Run a Phase 1 pilot** — process one full course suite end-to-end and submit to proofreader for validation
+5. **Review Phase 2** — once Phase 1 output is confirmed production-ready, revisit the internal tool conversation
 
 ---
 
 ## Appendix: Current Technology Stack
 
-| Component | Technology |
-|---|---|
-| Translation | Google Translate (free web API — pilot only) |
-| AI Review | Claude (manual chat interface — pilot only) |
-| Validation | Custom Python (`Step_4_Cross_Check.py`) |
-| Supported languages | Traditional Chinese (TW), Korean (KR), Japanese (JP), Simplified Chinese (CN), Bahasa Indonesia (ID) |
-| Operating environment | Local machine (macOS) |
-| Pipeline version | 3.2.0 |
+| Component | Technology | Status |
+|---|---|---|
+| Translation | Google Translate (free web API) | **To be replaced — Phase 1** |
+| AI Review | Manual chat (model unpinned; quality varies by session) | **To be replaced — Phase 1** |
+| AI Review (target) | Claude API, model `claude-opus-4-6` (pinned) | Phase 1 |
+| Validation | Custom Python (`Step_4_Cross_Check.py`) | Production-ready |
+| Supported languages | Traditional Chinese (TW), Korean (KR), Japanese (JP), Simplified Chinese (CN), Bahasa Indonesia (ID) | Production-ready |
+| Operating environment | Local machine — single operator | Phase 1 unchanged |
+| Pipeline version | 3.2.0 | — |

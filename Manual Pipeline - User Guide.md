@@ -73,6 +73,11 @@ Generates a raw baseline translation using the Google Translate free web API. Fa
 ### Step 2 — AI Quality Review (Core Quality Step)
 This is the human-in-the-loop step where an AI reviewer enforces glossary consistency and Taiwan-specific vocabulary.
 
+> **Known limitations of the chat-based review workflow:**
+> - **Model not pinned:** Review quality depends on whichever model you are chatting with (Claude, Antigravity, Google AI Studio, etc.). Different models interpret the review prompt differently and produce inconsistent results. Always use the same model across all sessions for a given course.
+> - **Token exhaustion:** Chat windows have a finite context limit. As conversation history grows, available tokens shrink — large files may be silently truncated mid-review without warning. Always use Precision Review Mode (chunks of ~30 segments) for files over 50 segments, and start a fresh chat window for each review session.
+> - **No audit trail:** There is no record of which model reviewed which file or when. This is a quality control gap for production content.
+
 #### 🌟 The "Gold Standard" for Quality
 To assist students in recognizing exam terminology, follow the **Bilingual Parentheses Rule**:
 - **Rule:** When a key academic or exam term is mentioned, include the English term in parentheses (e.g., "任務反應 (Task Response)").
