@@ -21,7 +21,7 @@ The pipeline converts English `.srt` subtitle files into translated, production-
 | Stage | What Happens | Human Involvement |
 |---|---|---|
 | **1 — Auto-Translate** | Google Translate generates a raw baseline translation | None |
-| **2 — AI Review** | An AI reviewer (currently Claude) checks every segment against glossary rules, pedagogical standards, and linguistic guidelines | Triggers the review; pastes the output back |
+| **2 — AI Review** | An AI reviewer (currently Claude) checks every segment against glossary rules, pedagogical standards, and linguistic guidelines. An Google AI Studio/Gemini runs another round of review | Triggers the review; pastes the output back |
 | **3 — Build SRT** | Reviewed corrections are compiled into a final `.srt` file | None |
 | **4 — Validation** | Automated check confirms segment count and timestamps match the source exactly | None |
 
