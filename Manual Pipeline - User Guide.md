@@ -1,5 +1,5 @@
 # PREP Subtitle Translation Pipeline
-**Version: 3.1.0 — Refined Pedagogical Standards**
+**Version: 3.2.0 — Robustness & Validation**
 
 **Who this is for:** Anyone at Prep translating English educational video subtitle files into target languages (e.g., Taiwanese Mandarin).
 
@@ -25,8 +25,9 @@ python3 run_pipeline.py --folder "inputs/Writing Inter 2.6" --lang TW
 3. Script pauses and shows you the exact message to paste to **Antigravity** for review
 4. Press Enter once Antigravity finishes writing the `_reviewed.json` files
 5. Step 3 (build final SRT) runs automatically
+6. **Step 4 (Validation)** runs automatically to check for structural parity and drift
 
-> The script is smart about stage — if a file already has a draft or reviewed JSON, it skips straight to the right step.
+> The script is smart about stage — if a file already has a draft, reviewed, or validated marker, it skips straight to the right step.
 
 ---
 
@@ -49,63 +50,56 @@ python3 run_batch.py --build --lang TW
 
 # Build only specific files you choose from a menu
 python3 run_batch.py --build --lang TW --pick
+
+# Run Step 4: Cross-check ALL finalized SRTs for structural parity
+python3 run_batch.py --check --lang TW
+
+# Run Step 4 and AUTO-REPAIR timestamp drifts
+python3 run_batch.py --check --repair --lang TW
 ```
 
 ---
 
-## The 3-Step Workflow
+## The 4-Step Workflow
 
 ### Step 1 — Free Auto-Translate (Zero Cost)
-Generates a raw baseline translation using the Google Translate free web API. Fast but imperfect — glossary terms like "Band" and "Task 1" will be incorrectly translated and are corrected in Step 2.
+Generates a raw baseline translation using the Google Translate free web API. Fast but imperfect.
 
-- **Script:** `core_free_translator.py` (called automatically by `run_pipeline.py` or `run_batch.py`)
+- **Script:** `core_free_translator.py`
 - **Output:** `outputs/TW/<file>/<prefix><file>_draft.json`
-
-To run manually on a single file:
-```bash
-python3 Step_1B_Free_Translate.py --input "inputs/Writing Inter 2.6/L5-D3.srt" --lang TW
-```
 
 ---
 
 ### Step 2 — AI Quality Review (Core Quality Step)
-This is the human-in-the-loop step where an AI reviewer enforces:
-- IELTS/TOEIC glossary consistency (Band, Task 1, Task Achievement, etc.)
-- Taiwan vocabulary (資訊 not 信息, 影片 not 視頻)
-- Natural phrasing and semantic accuracy
-- Correction of untranslated segments
+This is the human-in-the-loop step where an AI reviewer enforces glossary consistency and Taiwan-specific vocabulary.
 
 #### 🌟 The "Gold Standard" for Quality
 To assist students in recognizing exam terminology, follow the **Bilingual Parentheses Rule**:
-- **Rule:** When a key academic or exam term is mentioned, include the English term in parentheses after its first or primary mention.
-- **Example:** "任務反應 (Task Response)", "連貫性與銜接性 (Coherence and Cohesion)".
-- **Glossary Focus:** Ensure terms like `Body Paragraphs` (正文段落), `Topic Sentence` (主題句), and `Preppies` (Prep 考生) are correctly localized for Taiwan.
+- **Rule:** When a key academic or exam term is mentioned, include the English term in parentheses (e.g., "任務反應 (Task Response)").
 
-**Option A: Antigravity (Claude Cowork) — Fastest**
-Simply tell Antigravity in this chat:
-> *"Review `outputs/TW/L5-D3/TW-L5-D3_draft.json` for TW subtitles"*
-
-Antigravity reads the draft, applies all rules from `claude_review_prompt.txt`, and saves the `_reviewed.json` directly to your disk. No browser needed.
-
-**Option B: Google AI Studio or Claude.ai**
-1. Open **Google AI Studio** or **Claude.ai**
-2. Set the System Prompt to the contents of `claude_review_prompt.txt`
-3. Upload the `_draft.json` file
-4. Prompt: *"Please review and finalize the attached draft JSON for TW subtitles."*
-5. Save the output as `_reviewed.json` in the same output folder
+**Precision Review Mode (Large Files):**
+For files >50 segments, divide the `_draft.json` into chunks of ~30 segments and review them individually to prevent AI truncation.
 
 ---
 
 ### Step 3 — Build the Final SRT
-Converts the reviewed JSON back into a standard `.srt` file ready for video embedding.
+Converts the reviewed JSON back into a standard `.srt` file.
 
 - **Script:** `Step_3_Build_Final_SRT.py`
 - **Output:** `outputs/TW/<file>/<prefix><file>.srt`
 
-To run manually on a single file:
-```bash
-python3 Step_3_Build_Final_SRT.py --input "outputs/TW/L5-D3/TW-L5-D3_reviewed.json"
-```
+The build summary will warn you if any segments had a Google Translate failure during Step 1 (they will contain English as a fallback). Check the segment indices listed and fix them manually in the reviewed JSON before distributing.
+
+---
+
+### Step 4 — Cross-Check & Verification
+Validates that the translated subtitle file has the exact same segment count as the source and that no timestamp drift has occurred.
+
+- **Script:** `Step_4_Cross_Check.py` (called by `run_batch.py --check`)
+- **Action:** Compares `inputs/source.srt` with `outputs/target.srt`.
+- **Repair:** Use the `--repair` flag to automatically sync timestamps if minor shifts are detected.
+
+> **Note:** A segment count mismatch between source and target is a hard failure — the script will exit immediately and the file will not be marked as verified. This must be corrected manually (by editing the reviewed JSON and rebuilding) before validation can pass.
 
 ---
 
@@ -116,7 +110,8 @@ python3 Step_3_Build_Final_SRT.py --input "outputs/TW/L5-D3/TW-L5-D3_reviewed.js
 | ⬜ | Needs translate | No draft JSON yet — run Step 1 |
 | 🟡 | Needs AI review | Draft exists — ask Antigravity to review |
 | 🟠 | Needs build | Reviewed JSON ready — run Step 3 |
-| ✅ | Complete | Final `.srt` is done |
+| 🛡️ | Needs verify | SRT is built but needs Step 4 cross-check |
+| ✅ | Verified | Final `.srt` is checked and production-ready |
 
 ---
 
@@ -126,21 +121,20 @@ python3 Step_3_Build_Final_SRT.py --input "outputs/TW/L5-D3/TW-L5-D3_reviewed.js
 prep-subtitle-pipeline/
 │
 ├── run_pipeline.py          ← End-to-end runner (pick files → go)
-├── run_batch.py             ← Per-step batch runner with --pick flag
+├── run_batch.py             ← Per-step batch runner (status/check/repair)
 ├── Step_1B_Free_Translate.py  ← Single-file translate wrapper
 ├── Step_3_Build_Final_SRT.py  ← Single-file SRT builder
-├── core_free_translator.py  ← Translation engine (do not call directly)
+├── Step_4_Cross_Check.py      ← Structural parity & drift checker
 ├── claude_review_prompt.txt ← Source-of-truth review rules for AI
 │
 ├── inputs/                  ← Place your .srt files here
-│   └── Writing Inter 2.6/
-│
 └── outputs/
     └── TW/
         └── L5-D3/
             ├── TW-L5-D3_draft.json      ← After Step 1
             ├── TW-L5-D3_reviewed.json   ← After Step 2
-            └── TW-L5-D3.srt            ← After Step 3 ✅
+            ├── .validated               ← Marker for Step 4 ✅
+            └── TW-L5-D3.srt            ← Final Output
 ```
 
 ---
